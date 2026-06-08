@@ -1,5 +1,5 @@
 /*
- * Embeddable AI Support Agent — vanilla JS widget (no dependencies).
+ * Embeddable AI Support Agent, vanilla JS widget (no dependencies).
  * Usage:
  *   <script src="https://your-host/widget.js"
  *           data-api-url="https://your-host"
@@ -41,9 +41,9 @@
   panel.innerHTML =
     '<div class="aisa-head">' + TITLE + '</div>' +
     '<div class="aisa-msgs" id="aisa-msgs"></div>' +
-    '<div class="aisa-typing" id="aisa-typing">Assistant is typing…</div>' +
+    '<div class="aisa-typing" id="aisa-typing">Assistant is typing...</div>' +
     '<form class="aisa-foot" id="aisa-form">' +
-      '<input id="aisa-input" placeholder="Type your question…" autocomplete="off" />' +
+      '<input id="aisa-input" placeholder="Type your question..." autocomplete="off" />' +
       '<button type="submit">Send</button>' +
     '</form>';
 
@@ -92,7 +92,7 @@
       })
       .catch(function () {
         typing.style.display = 'none';
-        add('bot', 'Network error — is the API running?');
+        add('bot', 'Network error, is the API running?');
       });
   });
 })();

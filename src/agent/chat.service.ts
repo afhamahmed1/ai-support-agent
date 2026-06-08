@@ -56,7 +56,7 @@ export class ChatService {
         };
       }
 
-      // The model asked for one or more tools — run them and feed results back.
+      // The model asked for one or more tools, run them and feed results back.
       for (const call of calls) {
         if (call.type !== 'function') continue;
         toolsUsed.push(call.function.name);

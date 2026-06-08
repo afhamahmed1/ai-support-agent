@@ -1,4 +1,4 @@
-# Acme Analytics — Help Center
+# Acme Analytics: Help Center
 
 > Sample knowledge base used by the AI support agent for retrieval (RAG). Replace this with your own product docs.
 
@@ -6,10 +6,10 @@
 Acme Analytics is a product-analytics platform for SaaS teams. Track events, build funnels, monitor retention, and share dashboards with your team.
 
 ## Pricing
-- **Free** — up to 10,000 events/month, 1 project, 30-day data retention.
-- **Pro — $49/month** — up to 1,000,000 events/month, unlimited projects, 12-month retention, funnels and retention reports.
-- **Business — $199/month** — up to 10,000,000 events/month, role-based access control, SSO (SAML), and priority support.
-- **Enterprise** — custom volume, SLA, and dedicated support. Contact sales.
+- **Free:** up to 10,000 events/month, 1 project, 30-day data retention.
+- **Pro ($49/month):** up to 1,000,000 events/month, unlimited projects, 12-month retention, funnels and retention reports.
+- **Business ($199/month):** up to 10,000,000 events/month, role-based access control, SSO (SAML), and priority support.
+- **Enterprise:** custom volume, SLA, and dedicated support. Contact sales.
 
 Annual billing saves 20%. You can upgrade or downgrade at any time; changes are prorated.
 

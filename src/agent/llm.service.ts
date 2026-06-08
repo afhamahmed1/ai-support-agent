@@ -21,7 +21,7 @@ export class LlmService {
   constructor(private readonly config: ConfigService) {
     const apiKey = this.config.get<string>('openai.apiKey');
     if (!apiKey) {
-      this.logger.warn('OPENAI_API_KEY is not set — requests will fail until it is configured.');
+      this.logger.warn('OPENAI_API_KEY is not set, requests will fail until it is configured.');
     }
     this.client = new OpenAI({ apiKey });
     this.model = this.config.get<string>('openai.model') ?? 'gpt-4o-mini';

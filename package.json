@@ -1,7 +1,7 @@
 {
   "name": "ai-support-agent",
   "version": "0.1.0",
-  "description": "Embeddable AI support agent for SaaS products — RAG over your docs + tool-calling, built with NestJS.",
+  "description": "Embeddable AI support agent for SaaS products, RAG over your docs + tool-calling, built with NestJS.",
   "author": "Afham Ahmed",
   "license": "MIT",
   "scripts": {

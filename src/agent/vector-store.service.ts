@@ -19,7 +19,7 @@ export interface RetrievedChunk {
  * Minimal in-memory vector store: embeds the knowledge base on startup and
  * retrieves the most similar sections via cosine similarity.
  *
- * Swap this for a pgvector / Pinecone adapter in production — the public
+ * Swap this for a pgvector / Pinecone adapter in production, the public
  * `search()` contract stays the same.
  */
 @Injectable()
