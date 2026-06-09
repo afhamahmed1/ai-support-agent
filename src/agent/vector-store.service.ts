@@ -1,33 +1,33 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { LlmService } from './llm.service';
+import { RetrievedChunk, VectorBackend } from './vector-store/vector-backend';
+import { InMemoryBackend } from './vector-store/in-memory.backend';
+import { PgVectorBackend } from './vector-store/pgvector.backend';
 
-interface Chunk {
-  title: string;
-  text: string;
-  embedding: number[];
-}
-
-export interface RetrievedChunk {
-  title: string;
-  text: string;
-  score: number;
-}
+export type { RetrievedChunk } from './vector-store/vector-backend';
 
 /**
- * Minimal in-memory vector store: embeds the knowledge base on startup and
- * retrieves the most similar sections via cosine similarity.
- *
- * Swap this for a pgvector / Pinecone adapter in production, the public
- * `search()` contract stays the same.
+ * Embeds the knowledge base on startup and retrieves the most similar
+ * sections for a query. Storage is pluggable: in-memory by default (zero
+ * setup), pgvector when DATABASE_URL is set.
  */
 @Injectable()
 export class VectorStoreService implements OnModuleInit {
   private readonly logger = new Logger(VectorStoreService.name);
-  private chunks: Chunk[] = [];
+  private readonly backend: VectorBackend;
+  private ready = false;
 
-  constructor(private readonly llm: LlmService) {}
+  constructor(
+    private readonly llm: LlmService,
+    config: ConfigService,
+  ) {
+    const databaseUrl = config.get<string>('databaseUrl');
+    this.backend = databaseUrl ? new PgVectorBackend(databaseUrl) : new InMemoryBackend();
+    this.logger.log(`Vector store backend: ${databaseUrl ? 'pgvector' : 'in-memory'}`);
+  }
 
   async onModuleInit(): Promise<void> {
     try {
@@ -43,8 +43,9 @@ export class VectorStoreService implements OnModuleInit {
     if (!sections.length) return;
 
     const embeddings = await this.llm.embed(sections.map((s) => s.text));
-    this.chunks = sections.map((s, i) => ({ ...s, embedding: embeddings[i] }));
-    this.logger.log(`Ingested ${this.chunks.length} knowledge-base sections.`);
+    await this.backend.replaceAll(sections.map((s, i) => ({ ...s, embedding: embeddings[i] })));
+    this.ready = true;
+    this.logger.log(`Ingested ${sections.length} knowledge-base sections.`);
   }
 
   /** Split markdown into one chunk per (#, ##, ###) heading. */
@@ -73,23 +74,8 @@ export class VectorStoreService implements OnModuleInit {
   }
 
   async search(query: string, k = 4): Promise<RetrievedChunk[]> {
-    if (!this.chunks.length) return [];
+    if (!this.ready) return [];
     const [q] = await this.llm.embed([query]);
-    return this.chunks
-      .map((c) => ({ title: c.title, text: c.text, score: cosineSimilarity(q, c.embedding) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, k);
+    return this.backend.search(q, k);
   }
-}
-
-function cosineSimilarity(a: number[], b: number[]): number {
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB) || 1);
 }
