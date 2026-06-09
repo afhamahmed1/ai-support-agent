@@ -1,0 +1,13 @@
+# Render blueprint: deploy the agent with one click (free plan works for a demo).
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: ai-support-agent
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false # set it in the Render dashboard
+      - key: CORS_ORIGINS
+        value: "*"
