@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import type {
   ChatCompletionMessage,
   ChatCompletionMessageParam,
+  ChatCompletionMessageToolCall,
   ChatCompletionTool,
 } from 'openai/resources/chat/completions';
 
@@ -47,5 +48,57 @@ export class LlmService {
       temperature: 0.2,
     });
     return res.choices[0].message;
+  }
+
+  /**
+   * Streaming variant of chat(): yields content tokens as they arrive and
+   * returns the fully assembled message (including any tool calls) when the
+   * round completes, so callers can run the same tool loop either way.
+   */
+  async *chatStream(
+    messages: ChatCompletionMessageParam[],
+    tools?: ChatCompletionTool[],
+  ): AsyncGenerator<string, ChatCompletionMessage> {
+    const hasTools = Boolean(tools && tools.length);
+    const stream = await this.client.chat.completions.create({
+      model: this.model,
+      messages,
+      tools: hasTools ? tools : undefined,
+      tool_choice: hasTools ? 'auto' : undefined,
+      temperature: 0.2,
+      stream: true,
+    });
+
+    let content = '';
+    const toolCalls: ChatCompletionMessageToolCall[] = [];
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta;
+      if (!delta) continue;
+
+      if (delta.content) {
+        content += delta.content;
+        yield delta.content;
+      }
+
+      // Tool calls arrive as fragments keyed by index: the id and name come
+      // once, the JSON arguments accumulate across chunks.
+      for (const tc of delta.tool_calls ?? []) {
+        const slot = (toolCalls[tc.index] ??= {
+          id: '',
+          type: 'function',
+          function: { name: '', arguments: '' },
+        });
+        if (tc.id) slot.id = tc.id;
+        if (tc.function?.name) slot.function.name = tc.function.name;
+        if (tc.function?.arguments) slot.function.arguments += tc.function.arguments;
+      }
+    }
+
+    return {
+      role: 'assistant',
+      content: content || null,
+      tool_calls: toolCalls.length ? toolCalls : undefined,
+    } as ChatCompletionMessage;
   }
 }

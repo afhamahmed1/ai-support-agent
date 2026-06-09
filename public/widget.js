@@ -1,5 +1,7 @@
 /*
  * Embeddable AI Support Agent, vanilla JS widget (no dependencies).
+ * Streams answers token-by-token (SSE) and falls back to plain JSON
+ * if streaming is unavailable.
  * Usage:
  *   <script src="https://your-host/widget.js"
  *           data-api-url="https://your-host"
@@ -62,6 +64,65 @@
     row.appendChild(bubble);
     msgs.appendChild(row);
     msgs.scrollTop = msgs.scrollHeight;
+    return bubble;
+  }
+
+  function remember(q, answer) {
+    history.push({ role: 'user', content: q });
+    history.push({ role: 'assistant', content: answer });
+    if (history.length > 12) history = history.slice(-12);
+  }
+
+  /* Plain JSON fallback (also the path for very old browsers). */
+  function askJson(q) {
+    return fetch(API + '/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: q, history: history })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { return (data && data.answer) || 'Sorry, something went wrong.'; });
+  }
+
+  /* Streaming path: POST to the SSE endpoint, append tokens as they arrive.
+     Calls onToken(token) per token and resolves with the final answer. */
+  function askStream(q, onToken) {
+    return fetch(API + '/api/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: q, history: history })
+    }).then(function (res) {
+      if (!res.ok || !res.body) throw new Error('stream unavailable');
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+      var answer = '';
+
+      function pump() {
+        return reader.read().then(function (step) {
+          if (step.done) return answer;
+          buffer += decoder.decode(step.value, { stream: true });
+          var parts = buffer.split('\n\n');
+          buffer = parts.pop();
+          for (var i = 0; i < parts.length; i++) {
+            var line = parts[i];
+            if (line.indexOf('data: ') !== 0) continue;
+            var event;
+            try { event = JSON.parse(line.slice(6)); } catch (e) { continue; }
+            if (event.type === 'token') {
+              answer += event.token;
+              onToken(event.token);
+            } else if (event.type === 'done') {
+              answer = event.answer || answer;
+            } else if (event.type === 'error' && !answer) {
+              throw new Error(event.message || 'agent error');
+            }
+          }
+          return pump();
+        });
+      }
+      return pump();
+    });
   }
 
   add('bot', 'Hi! Ask me anything about the product.');
@@ -76,23 +137,41 @@
     input.value = '';
     typing.style.display = 'block';
 
-    fetch(API + '/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: q, history: history })
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
+    var bubble = null;
+    var streamed = '';
+
+    askStream(q, function (token) {
+      if (!bubble) {
         typing.style.display = 'none';
-        var answer = (data && data.answer) || 'Sorry, something went wrong.';
-        add('bot', answer);
-        history.push({ role: 'user', content: q });
-        history.push({ role: 'assistant', content: answer });
-        if (history.length > 12) history = history.slice(-12);
+        bubble = add('bot', '');
+      }
+      streamed += token;
+      bubble.textContent = streamed;
+      msgs.scrollTop = msgs.scrollHeight;
+    })
+      .then(function (answer) {
+        typing.style.display = 'none';
+        if (bubble) bubble.textContent = answer || streamed;
+        else add('bot', answer || 'Sorry, something went wrong.');
+        remember(q, answer || streamed);
       })
       .catch(function () {
-        typing.style.display = 'none';
-        add('bot', 'Network error, is the API running?');
+        // Streaming failed before any token arrived: retry once without it.
+        if (bubble) {
+          typing.style.display = 'none';
+          remember(q, streamed);
+          return;
+        }
+        askJson(q)
+          .then(function (answer) {
+            typing.style.display = 'none';
+            add('bot', answer);
+            remember(q, answer);
+          })
+          .catch(function () {
+            typing.style.display = 'none';
+            add('bot', 'Network error, is the API running?');
+          });
       });
   });
 })();

@@ -14,10 +14,11 @@ Built with **NestJS + TypeScript** and the **OpenAI API**. Provider-agnostic LLM
 ## Features
 - **RAG over your docs**: grounded answers from a knowledge base, with source tracking (no invented policies).
 - **Tool-calling**: the agent can call typed functions (order lookup, ticket creation, human escalation) and use the results in its reply.
+- **Streaming responses (SSE)**: token-by-token answers from `POST /api/chat/stream`; the widget renders them live, with a JSON fallback.
 - **Embeddable widget**: dependency-free vanilla-JS chat widget; drop it into any site.
 - **Provider-agnostic LLM layer**: swap OpenAI for another provider by implementing one small interface.
 - **Clean NestJS architecture**: modular, DI-based, DTO-validated, with unit tests.
-- **Zero-setup vector store**: in-memory cosine search for local dev; swap for pgvector/Pinecone in production.
+- **Pluggable vector store**: zero-setup in-memory search for local dev; set `DATABASE_URL` and the same code runs on Postgres + pgvector.
 
 ## Architecture
 ```
@@ -44,6 +45,11 @@ cp .env.example .env        # add your OPENAI_API_KEY
 npm run start:dev
 ```
 Open **http://localhost:3000/demo.html** to chat with the agent, or call the API directly:
+
+To run with persistent embeddings (Postgres + pgvector) instead of the in-memory store:
+```bash
+OPENAI_API_KEY=sk-... docker compose up --build
+```
 ```bash
 curl -X POST http://localhost:3000/api/chat \
   -H "Content-Type: application/json" \
@@ -58,6 +64,7 @@ curl -X POST http://localhost:3000/api/chat \
 | `OPENAI_MODEL` | `gpt-4o-mini` | Chat model. |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model. |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins. |
+| `DATABASE_URL` | (none) | Optional. Postgres URL with the pgvector extension; embeddings persist there instead of memory. `docker compose up` provides one. |
 
 ## API
 **`POST /api/chat`**
@@ -71,6 +78,15 @@ curl -X POST http://localhost:3000/api/chat \
   "toolsUsed": []
 }
 ```
+**`POST /api/chat/stream`** — same request body, answered as Server-Sent Events:
+```
+data: {"type":"sources","sources":["Exporting your data"]}
+data: {"type":"token","token":"You can"}
+data: {"type":"token","token":" export raw events"}
+data: {"type":"tool","name":"create_ticket"}        // only when the agent calls a tool
+data: {"type":"done","answer":"You can export raw events...","sources":[...],"toolsUsed":[...]}
+```
+
 **`GET /api/health`** → `{ "status": "ok" }`
 
 ## Embedding the widget
@@ -103,10 +119,11 @@ src/
 ├── config/configuration.ts
 └── agent/
     ├── agent.module.ts
-    ├── chat.controller.ts        # POST /api/chat, GET /api/health
-    ├── chat.service.ts           # RAG + tool-calling orchestration
-    ├── llm.service.ts            # OpenAI chat + embeddings (swappable)
-    ├── vector-store.service.ts   # in-memory embeddings + cosine search
+    ├── chat.controller.ts        # POST /api/chat, /api/chat/stream (SSE), GET /api/health
+    ├── chat.service.ts           # RAG + tool-calling orchestration (sync + streaming)
+    ├── llm.service.ts            # OpenAI chat + embeddings + token streaming (swappable)
+    ├── vector-store.service.ts   # chunking + embedding facade
+    ├── vector-store/             # backends: in-memory (default), pgvector (DATABASE_URL)
     ├── tools.service.ts          # typed, executable tools
     └── dto/chat-request.dto.ts
 public/   widget.js, demo.html
@@ -114,10 +131,14 @@ data/     knowledge-base.md
 test/     chat.service.spec.ts
 ```
 
+## Deploying
+- **Render:** the repo includes a [`render.yaml`](render.yaml) blueprint. Create a new Blueprint service, point it at this repo, set `OPENAI_API_KEY`, done.
+- **Anywhere with Docker:** `docker build -t ai-support-agent . && docker run -p 3000:3000 -e OPENAI_API_KEY=sk-... ai-support-agent`
+
 ## Roadmap
-- [ ] pgvector / Pinecone vector-store adapter
+- [x] pgvector vector-store adapter (`DATABASE_URL`)
+- [x] Streaming responses (SSE)
 - [ ] Per-tenant knowledge bases (multi-tenant isolation)
-- [ ] Streaming responses (SSE)
 - [ ] Analytics: unanswered questions + CSAT
 - [ ] Admin UI for managing docs and tools
 
